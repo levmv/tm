@@ -6,25 +6,18 @@ import (
 	"time"
 )
 
-const (
-	StateOpen = iota
-	StateClosed
-	StateDeferred
-)
-
 type Task struct {
 	Uid       int64
 	Id        int64
-	State     int
 	Priority  int
-	Summary   string
+	Desc      string
 	ProjectId int64
 	Created   int64
 	Changed   int64
 	Started   int64
 	Closed    int64
 	Deffered  int64
-	TimeSpent int64
+	Time      int64
 	Due       int64
 }
 
@@ -32,13 +25,14 @@ type TaskView struct {
 	Task
 	Project         string
 	ProjectPriority int
+	ProjectUrg      float64
 	Tags            string
 	TagsCount       int
 	Urgency         float64
 }
 
 func (t *Task) Start() error {
-	if t.State != StateOpen {
+	if t.isClosed() {
 		return errors.New("couldn't start closed task")
 	}
 	t.Started = time.Now().Unix()
@@ -49,7 +43,7 @@ func (t *Task) Start() error {
 }
 
 func (t *Task) Stop() error {
-	if t.Started == 0 {
+	if !t.isActive() {
 		return errors.New("task already stopped")
 	}
 	t.Started = 0
@@ -60,23 +54,23 @@ func (t *Task) Stop() error {
 	return nil
 }
 
-func (t *Task) Done() error {
-	t.State = StateClosed
-	if err := t.Update(); err != nil {
-		return err
-	}
-	return nil
+func (t *Task) isActive() bool {
+	return t.Started != 0
+}
+
+func (t *Task) isClosed() bool {
+	return t.Closed != 0
 }
 
 func (t *Task) Style() table.Style {
 	s := table.Style{
-		Bg: colors.BgDefault,
-		Fg: colors.FgDefault,
+		//Bg: colors.BgDef,
+		Fg: colors.FgDef,
 	}
-	if t.Started > 0 {
+	if t.isActive() {
 		s.Bg = colors.BgActive
 		s.Fg = colors.FgActive
-	} else if t.TimeSpent > 0 {
+	} else if t.Time > 0 {
 		s.Fg = colors.BgPaused
 	}
 
@@ -84,7 +78,7 @@ func (t *Task) Style() table.Style {
 }
 
 func (t *TaskView) Text() string {
-	s := t.Summary
+	s := t.Desc
 	if t.TagsCount > 0 {
 		s = s + " +" + t.Tags
 	}
@@ -95,10 +89,9 @@ func (t *Task) Create() error {
 
 	t.Created = time.Now().Unix()
 
-	r, err := db.Exec("INSERT INTO tasks(`state`, `priority`, `summary`, `project_id`, `created`, `due`) VALUES(?,?,?,?,?,?)",
-		t.State,
+	r, err := db.Exec("insert into tasks(`pri`, `desc`, `project_id`, `created`, `due`) values(?,?,?,?,?)",
 		t.Priority,
-		t.Summary,
+		t.Desc,
 		t.ProjectId,
 		t.Created,
 		t.Due)
@@ -115,13 +108,13 @@ func (t *Task) Create() error {
 }
 
 func (t *Task) Update() error {
-	_, err := db.Exec("UPDATE tasks SET `state`=?, `priority`=?,`summary`=?,`project_id`=?,`due`=?,`started`=? WHERE uid = ?",
-		t.State,
+	_, err := db.Exec("update tasks set `pri`=?,`desc`=?,`project_id`=?,`due`=?,`started`=?,`closed`=? where uid = ?",
 		t.Priority,
-		t.Summary,
+		t.Desc,
 		t.ProjectId,
 		t.Due,
 		t.Started,
+		t.Closed,
 		t.Uid)
 
 	if err != nil {
@@ -131,22 +124,29 @@ func (t *Task) Update() error {
 	return nil
 }
 
+func (t *Task) Close() error {
+	if _, err := db.Exec("update tasks set id = null, closed = unixepoch('now') where uid = ?", t.Uid); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (t *Task) Delete() error {
-	if _, err := db.Exec("DELETE FROM tasks WHERE uid = ?", t.Uid); err != nil {
+	if _, err := db.Exec("delete from tasks where uid = ?", t.Uid); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (t *TaskView) CalcUrgency() {
-	t.Urgency = 3*t.PriorityUrgency() + 2*t.AgeUrgency() + t.ProjectUrgency() + t.TagsUrgency()
+	t.Urgency = 3*t.PriorityUrgency() + 2*t.AgeUrgency() + 2*t.ProjectUrgency() + t.TagsUrgency()
 }
 
 func (t *TaskView) ProjectUrgency() float64 {
 	if t.ProjectId != 0 {
-		return float64((4 - t.ProjectPriority) / 4)
+		return t.ProjectUrg
 	}
-	return 0.25
+	return 0.1
 }
 
 func (t *TaskView) TagsUrgency() float64 {

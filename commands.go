@@ -9,7 +9,7 @@ type CommandFunc func(q *Query) error
 
 func CommandAdd(q *Query) error {
 	task := Task{}
-	task.Summary = q.Text
+	task.Desc = q.Text
 
 	if q.Attributes.Project != "" {
 		task.ProjectId = ProjectID(q.Attributes.Project)
@@ -66,9 +66,10 @@ func CommandNext(q *Query) error {
 		return err
 	}
 
-	if err := Display(tasks); err != nil {
+	if err := DisplayTasks(tasks); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -101,13 +102,19 @@ func CommandStop(q *Query) error {
 
 func CommandRemove(q *Query) error {
 	tasks, err := FindTasks(&q.Filters)
-	// todo: confirm if more then one
+
+	if len(tasks) > 1 {
+		if Confirm("You want to remove %d tasks. Continue?", len(tasks)) == false {
+			return nil
+		}
+	}
+
 	if err != nil {
 		return err
 	}
 	for _, t := range tasks {
 		if err := t.Delete(); err != nil {
-			fmt.Printf("#%v (%v) deleted\n", t.Id, t.Summary)
+			fmt.Printf("#%v (%v) deleted\n", t.Id, t.Desc)
 			return err
 		}
 	}
@@ -120,8 +127,8 @@ func CommandDone(q *Query) error {
 		return err
 	}
 	for _, t := range tasks {
-		if err := t.Done(); err != nil {
-			fmt.Printf("#%v (%v) resolved\n", t.Id, t.Summary)
+		if err := t.Close(); err != nil {
+			fmt.Printf("#%v (%v) resolved\n", t.Id, t.Desc)
 			return err
 		}
 	}
@@ -157,6 +164,24 @@ func CommandProjects(q *Query) error {
 
 	if err := DisplayProjects(list); err != nil {
 		return err
+	}
+	return nil
+}
+
+func CommandTimes(q *Query) error {
+	if len(q.Filters.IDs) != 1 {
+		return errors.New("must be selected one task")
+	}
+	tasks, err := FindTasks(&q.Filters)
+	if err != nil {
+		return err
+	}
+	if err := DisplayOne(tasks[0]); err != nil {
+		Error("%v", err)
+	}
+	times, err := FindTimes(tasks[0].Uid)
+	for _, t := range times {
+		fmt.Printf("%v - %v (%v)", t.Start, t.End, t.Duration)
 	}
 	return nil
 }

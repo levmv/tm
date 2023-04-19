@@ -13,6 +13,12 @@ func isCmd(item string) bool {
 	return found
 }
 
+const (
+	StateOpen = iota
+	StateClosed
+	StateDeferred
+)
+
 type Attrs struct {
 	Project      string
 	AntiProjects []string

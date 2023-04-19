@@ -9,12 +9,12 @@ import _ "modernc.org/sqlite"
 
 func initDb() (*sql.DB, error) {
 
-	home, err := os.UserHomeDir()
+	path, err := getFilePath()
 	if err != nil {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", home+"/.tm.sqlite")
+	db, err := sql.Open("sqlite", path)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db: %w", err)
@@ -25,4 +25,19 @@ func initDb() (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func getFilePath() (string, error) {
+	path := os.Getenv("TM_DB")
+
+	if path != "" {
+		return path, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	return home + "/.tm.sqlite", nil
 }

@@ -8,12 +8,15 @@ import (
 )
 
 type Project struct {
-	Id        int64
-	Name      string
-	Priority  int64
-	Open      int64
-	Closed    int64
-	TimeTotal int64
+	Id          int64
+	Name        string
+	Priority    int64
+	Open        int64
+	Closed      int64
+	ClosedMonth int64
+	Time        int64
+	TimeMonth   int64
+	Urgency     float64
 }
 
 func (p *Project) Save() error {
@@ -56,7 +59,7 @@ func ProjectID(name string) int64 {
 }
 
 func Projects() ([]Project, error) {
-	r, err := db.Query(fmt.Sprintf("SELECT * FROM projects"))
+	r, err := db.Query(fmt.Sprintf("SELECT id,name,pri,open,closed,closed_mo,time,time_mo,urgency FROM projects ORDER BY urgency DESC"))
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +67,8 @@ func Projects() ([]Project, error) {
 	for r.Next() {
 		var p Project
 		if err := r.Scan(
-			&p.Id, &p.Name, &p.Priority, &p.Open, &p.Closed, &p.TimeTotal); err != nil {
+			&p.Id, &p.Name, &p.Priority, &p.Open, &p.Closed,
+			&p.ClosedMonth, &p.Time, &p.TimeMonth, &p.Urgency); err != nil {
 			panic(err)
 		}
 		ps = append(ps, p)

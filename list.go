@@ -24,14 +24,15 @@ func FindTasks(qf *Attrs) ([]TaskView, error) {
 		if err := r.Scan(
 			&t.Uid,
 			&t.Id,
-			&t.State,
 			&t.Priority,
-			&t.Summary,
+			&t.Desc,
 			&t.ProjectId,
 			&t.Project,
+			&t.ProjectUrg,
 			&t.Created,
 			&t.Due,
 			&t.Started,
+			&t.Closed,
 			&t.Tags); err != nil {
 			return nil, err
 		}
@@ -53,7 +54,11 @@ func filteredRows(qf *Attrs) (*sql.Rows, error) {
 	}
 	if qf.Project != "" {
 		p, _ := FindProject(qf.Project)
-		conds = append(conds, fmt.Sprintf("`project_id` = %d", p.Id))
+		if p == nil {
+			Warning("project \"%v\" not found", qf.Project)
+		} else {
+			conds = append(conds, fmt.Sprintf("`project_id` = %d", p.Id))
+		}
 	}
 	if len(qf.AntiProjects) > 0 {
 		ids := ProjectsIds(qf.AntiProjects)
@@ -61,11 +66,11 @@ func filteredRows(qf *Attrs) (*sql.Rows, error) {
 	}
 	// todo: tags, antitags
 
-	conds = append(conds, "state = 0")
+	conds = append(conds, "closed = 0")
 	conds = append(conds, "deferred < unixepoch('now')")
 
-	return db.Query(fmt.Sprintf(`SELECT uid,id,state,priority,summary,project_id,project,created,due,started,tags 
-					 FROM tasks_view WHERE %s ORDER BY created ASC`, strings.Join(conds, " AND ")))
+	return db.Query(fmt.Sprintf(`SELECT uid,id,pri,desc,project_id,project,project_urgency,created,due,started,closed,tags 
+					 FROM tasks_view WHERE %s ORDER BY project_id DESC, created ASC`, strings.Join(conds, " AND ")))
 }
 
 func sortTasks(tasks []TaskView) []TaskView {
